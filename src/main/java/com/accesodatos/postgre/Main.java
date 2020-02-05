@@ -1,11 +1,17 @@
 package com.accesodatos.postgre;
 
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Types;
 import java.util.Properties;
 
 public class Main {
@@ -29,51 +35,84 @@ public class Main {
         try {
             Connection conn = DriverManager.getConnection(postgres,props);
             
-            //Creamos a sentencia SQL para crear unha función
+            //Creamos a táboa que conterá as imaxes
             //NOTA: nón é moi lóxico crear funcións dende código. Só o fago para despois utilizala
-            String sqlCreateFucction = new String(
-                "CREATE OR REPLACE FUNCTION inc(val integer) RETURNS integer AS $$ "+
-                "BEGIN "+
-                "RETURN val + 1; "+
-                "END;"+
-                "$$ LANGUAGE PLPGSQL;");
-        
+            String sqlTableCreation = new String(
+                "CREATE TABLE IF NOT EXISTS imaxes (nomeimaxe text, img bytea);");
+
             //Executamos a sentencia SQL anterior
-            CallableStatement createFunction = conn.prepareCall(sqlCreateFucction);
+            CallableStatement createFunction = conn.prepareCall(sqlTableCreation);
             createFunction.execute();
             createFunction.close();
-
-            //Creamos a chamada a función
-            String sqlCallFunction = new String("{? = call inc( ? ) }");
-            CallableStatement callFunction = conn.prepareCall(sqlCallFunction);
             
-            //O primeiro parámetro indica o tipo de datos que devolve
-            callFunction.registerOutParameter(1, Types.INTEGER);
+            //Collemos o arquivo
+            String nomeFicheiro = new String("logo.png");
+            File file = new File(nomeFicheiro);
+            FileInputStream fis = new FileInputStream(file);
             
-            //O segundo parámetro indica o valor que lle pasamos a función, neste exemplo 5
-            callFunction.setInt(2,5);
+            //Creamos a consulta que inserta a imaxe na base de datos
+            String sqlInsert = new String(
+                "INSERT INTO imaxes VALUES (?, ?);");
+            PreparedStatement ps = conn.prepareStatement(sqlInsert);
             
-            //Executamos a función
-            callFunction.execute();
+            //Engadimos como primeiro parámetro o nome do arquivo
+            ps.setString(1, file.getName());
             
-            //Obtemos o valor resultante da función
-            int valorDevolto = callFunction.getInt(1);
-            callFunction.close();
+            //Engadimos como segundo parámetro o arquivo e a súa lonxitude
+            ps.setBinaryStream(2, fis, (int)file.length());
             
-            //Mostramos o valor devolto
-            System.out.println("Valor devolto da función: " +  valorDevolto);
+            //Executamos a consulta
+            ps.executeUpdate();
             
+            //Cerrramos a consulta e o arquivo aberto
+            ps.close();
+            fis.close();
+            
+            //Creamos a consulta para recuperar a imaxe anterior
+            String sqlGet = new String(
+                "SELECT img FROM imaxes WHERE nomeimaxe = ?;");
+            PreparedStatement ps2 = conn.prepareStatement(sqlGet); 
+            
+            //Engadimos o nome da imaxe que queremos recuperar
+            ps2.setString(1, nomeFicheiro); 
+            
+            //Executamos a consulta
+            ResultSet rs = ps2.executeQuery();
+            
+            //Imos recuperando todos os bytes das imaxes
+            byte[] imgBytes = null;
+            while (rs.next()) 
+            { 
+                imgBytes = rs.getBytes(1); 
+            }
+            
+            //Cerramos a consulta
+            rs.close(); 
+            ps2.close();
+            
+            //Creamos o fluxo de datos para gardar o arquivo recuperado
+            String ficheiroSaida = new String("logo2.png");
+            File fileOut = new File(ficheiroSaida);
+            FileOutputStream fluxoDatos = new FileOutputStream(fileOut);
+            
+            //Gardamos o arquivo recuperado
+            if(imgBytes != null){
+                fluxoDatos.write(imgBytes);
+            }
+            
+            //cerramos o fluxo de datos de saida
+            fluxoDatos.close();    
+                        
             //Cerramos a conexión coa base de datos
-            if(conn!=null) conn.close();
-        
+            if(conn!=null) conn.close();        
         
         } catch (SQLException ex) {
             System.err.println("Error: " + ex.toString());
-        }
-        
-
-        
-        
+        } catch (FileNotFoundException ex) {
+            System.err.println("Error: " + ex.toString());
+        } catch (IOException ex) {
+            System.err.println("Error: " + ex.toString());
+        }       
         
     }
     
