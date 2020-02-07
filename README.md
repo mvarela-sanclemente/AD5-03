@@ -1,4 +1,4 @@
-# Notificacións en Postgre
+# Notificacións en PostgreSQL
 PostgreSQL permite que o propio xestor de base de datos avise ao cliente de que aconteceu un evento. Esto realizase cas **notificacións**.
 
 Tedes máis información en (https://www.postgresql.org/docs/12/sql-notify.html)[https://www.postgresql.org/docs/12/sql-notify.html].
