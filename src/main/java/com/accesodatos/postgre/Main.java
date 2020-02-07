@@ -4,6 +4,8 @@ package com.accesodatos.postgre;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Date;
@@ -29,7 +31,7 @@ public class Main {
         String postgres = "jdbc:postgresql://"+url+"/"+db;
         
         //Tempo en minutos que estara a espera
-        Integer tempo = 2;
+        Integer tempo = 1;
         
         //Tempo que espera para cada consulta en milisegundos
         Integer espera = 1000;
@@ -43,7 +45,7 @@ public class Main {
                 "CREATE TABLE IF NOT EXISTS mensaxes ("
                         + "id SERIAL PRIMARY KEY, "
                         + "usuario TEXT NOT NULL, "
-                        + "mensaxes TEXT NOT NULL);");
+                        + "mensaxe TEXT NOT NULL);");
             CallableStatement createTable = conn.prepareCall(sqlTableCreation);
             createTable.execute();
             createTable.close();
@@ -80,10 +82,13 @@ public class Main {
             stmt.close();
             System.out.println("Esperando mensaxes...");
             
+            
             //Variables para controlar o tempo de espera
             boolean flag=true;
-            Date date = new Date();
-            long initial = date.getTime();
+            long finishAt = new Date().getTime() + (tempo * 60000);
+            
+            //Creamos a consulta que necesitaremos para obter a mensaxe
+            PreparedStatement sqlMensaxe = conn.prepareStatement("SELECT usuario,mensaxe FROM mensaxes WHERE id=?;");
             
             //Bucle para ir lendo as mensaxes
             while(flag){
@@ -94,23 +99,31 @@ public class Main {
                 //Se hai notificacions, recorrémolas e imprimimos os parametros 
                 if(notifications != null){
                     for(int i=0;i < notifications.length;i++){
-                        System.out.println(notifications[i].getParameter());
+                        
+                        //A notificacion danos como parámetro o id da mensaxe
+                        int id = Integer.parseInt(notifications[i].getParameter());
+                        
+                        //Facemos unha consulta a base de datos e imprimimos a mensaxe
+                        sqlMensaxe.setInt(1, id);
+                        ResultSet rs = sqlMensaxe.executeQuery();
+                        rs.next();
+                        System.out.println(rs.getString(1) + ":" + rs.getString(2));
+                        rs.close();
                     }
                 }
                 
                 //Esperamos un pouco de tempo entre conexións
                 Thread.sleep(espera);
                 
-                //Comrpobamos se pasou o tempo de espera
-                if((initial + (tempo * 60000)) > new Date().getTime()) flag=false;
-                
+                //Comprobamos se pasou o tempo de espera
+                if(new Date().getTime() > finishAt)flag=false;
+                    
             }
             
             //deixamos de escoitar conexións
             Statement stmt2 = conn.createStatement();
             stmt2.execute("UNLISTEN novamensaxe");
             stmt2.close();
-            
             
             if(conn!=null) conn.close();        
         
